@@ -1,3 +1,66 @@
-.zig-cache/
+# Zig build artifacts
+zig-cache/
 zig-out/
+.zig-cache/
+
+*.py
+temp.*
+tmp
+spsa*
+notes.typ
+*.png
+*.pgn
+*.epd
+*.zip
+*.vf
+
+# Build outputs
 *.o
+*.so
+*.dylib
+*.dll
+*.a
+*.lib
+*.exe
+*.wasm
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS files
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+.directory
+.Trash-*
+
+# Temp files
+temp*
+**/temp
+*tmp
+*temp
+temp.zig
+*tmp
+tmp*
+
+# Logs
+*.log
+
+Syzygy/
+
+*.bin
