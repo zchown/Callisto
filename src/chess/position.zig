@@ -3,6 +3,13 @@ const root = @import("root.zig");
 const utils = root.utils;
 const zob = root.zobrist;
 
+pub const GameResult = enum {
+    WhiteWin,
+    BlackWin,
+    Draw,
+    Ongoing,
+};
+
 pub const CastleValues = enum(u4) {
     NoCastling = 0,
     WhiteKingside = 1,
@@ -222,6 +229,25 @@ pub const Move = packed struct(u16) {
         return buf[0..4];
     }
 
+    pub fn fromSAN(san: []const u8) ?Move {
+        if (san.len < 4) return null;
+        const from = utils.squareFromString(san[0..2]) orelse return null;
+        const to = utils.squareFromString(san[2..4]) orelse return null;
+        if (san.len == 4) {
+            return .{ .from = from, .to = to, .cap = 0, .promo = 0, .flags = @intFromEnum(QNFlags.NQM) };
+        } else if (san.len == 5) {
+            const promo_piece = switch (san[4]) {
+                'n' => PFlags.Knight,
+                'b' => PFlags.Bishop,
+                'r' => PFlags.Rook,
+                'q' => PFlags.Queen,
+                else => return null,
+            };
+            return .{ .from = from, .to = to, .cap = 0, .promo = 1, .flags = @intFromEnum(promo_piece) };
+        }
+        return null;
+    }
+
     pub inline fn eql(self: Move, other: Move) bool {
         return @as(u16, @bitCast(self)) == @as(u16, @bitCast(other));
     }
@@ -257,6 +283,20 @@ pub const GameState = struct {
             .black_ks_rook_file = 7,
             .black_qs_rook_file = 0,
         };
+    }
+
+    pub fn copyFrom(self: *GameState, other: *const GameState) void {
+        self.cur_position = other.cur_position;
+        self.ply = other.ply;
+        self.to_move = other.to_move;
+        self.white_ks_rook_file = other.white_ks_rook_file;
+        self.white_qs_rook_file = other.white_qs_rook_file;
+        self.black_ks_rook_file = other.black_ks_rook_file;
+        self.black_qs_rook_file = other.black_qs_rook_file;
+
+        for (0..self.ply) |i| {
+            self.history[i] = other.history[i];
+        }
     }
 
     pub inline fn halfmoveClock(self: GameState) u8 {
