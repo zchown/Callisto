@@ -162,8 +162,55 @@ fn strip(s: []const u8) []const u8 {
 }
 
 pub fn pvToSanCopy(src: *const GameState, pv: []const u8, buf: []u8) []const u8 {
-    var scratch = src.*;
-    return pvToSanNoRestore(&scratch, pv, buf);
+    return pvDetail(src, pv, buf, 32).san;
+}
+
+pub const PvDetail = struct {
+    san: []const u8,
+    end: pos.Position,
+    last: ?Move,
+    plies: usize,
+};
+
+pub fn pvDetail(src: *const GameState, pv: []const u8, buf: []u8, max_moves: usize) PvDetail {
+    var gs = src.*;
+    var out = Sink{ .buf = buf };
+    var it = std.mem.tokenizeAny(u8, pv, " \t");
+
+    var first = true;
+    var count: usize = 0;
+    var last: ?Move = null;
+
+    while (it.next()) |tok| {
+        if (count >= max_moves) break;
+        if (gs.ply + 2 >= gs.history.len) break;
+
+        const m = (fromUci(&gs, tok) catch null) orelse break;
+
+        var sbuf: [max_len]u8 = undefined;
+        const text = toSan(&gs, m, &sbuf) catch break;
+
+        if (!first) out.byte(' ');
+        const full = (gs.ply + @intFromBool(gs.to_move == .White)) / 2;
+        if (gs.to_move == .White) {
+            out.print("{d}.", .{full});
+        } else if (first) {
+            out.print("{d}...", .{full});
+        }
+        out.str(text);
+        first = false;
+
+        gs.makeMove(m) catch break;
+        last = m;
+        count += 1;
+    }
+
+    return .{
+        .san = out.done(),
+        .end = gs.cur_position,
+        .last = last,
+        .plies = count,
+    };
 }
 
 fn pvToSanNoRestore(gs: *GameState, pv: []const u8, buf: []u8) []const u8 {

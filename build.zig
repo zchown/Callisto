@@ -4,6 +4,7 @@ const lua_scripts = [_]struct { name: []const u8, path: []const u8 }{
     .{ .name = "lua_init", .path = "lua/init.lua" },
     .{ .name = "lua_panels_evaluation", .path = "lua/panels/evaluation.lua" },
     .{ .name = "lua_panels_engine", .path = "lua/panels/engine.lua" },
+    .{ .name = "lua_panels_engine_cards", .path = "lua/panels/engine_cards.lua" },
     .{ .name = "lua_panels_moves", .path = "lua/panels/moves.lua" },
     .{ .name = "lua_panels_settings", .path = "lua/panels/settings.lua" },
 };

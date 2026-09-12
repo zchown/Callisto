@@ -75,6 +75,9 @@ pub const PvLine = struct {
     text_len: u16 = 0,
     san: [max_pv_san]u8 = undefined,
     san_len: u16 = 0,
+    end_position: chess.Position = undefined,
+    end_move: ?Move = null,
+    has_end: bool = false,
 
     pub fn uciSlice(self: *const PvLine) []const u8 {
         return self.text[0..self.text_len];
@@ -436,11 +439,19 @@ pub const Engine = struct {
         line.valid = true;
 
         if (changed and self.have_root) {
-            const san = chess.san.pvToSanCopy(&self.search_root, line.uciSlice(), &line.san);
-            line.san_len = @intCast(san.len);
+            const detail = chess.san.pvDetail(&self.search_root, line.uciSlice(), &line.san, 24);
+            line.san_len = @intCast(detail.san.len);
+            line.end_position = detail.end;
+            line.end_move = detail.last;
+            line.has_end = detail.plies > 0;
         }
 
         if (slot > self.pv_count) self.pv_count = slot;
+    }
+
+    pub fn seldepthOf(self: *const Engine) u32 {
+        if (self.pv_count == 0 or !self.pv[0].valid) return 0;
+        return self.pv[0].seldepth;
     }
 
     pub fn whitePovScore(self: *const Engine) ?uci.Score {

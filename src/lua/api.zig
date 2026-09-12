@@ -38,7 +38,6 @@ pub fn endPanelDraw() void {
     ui_ptr = null;
 }
 
-
 fn uiText(lua: *Lua) i32 {
     currentUi(lua).text(lua.checkString(1));
     return 0;
@@ -170,6 +169,58 @@ fn uiEngineLines(lua: *Lua) i32 {
     return 0;
 }
 
+fn uiEngineCard(lua: *Lua) i32 {
+    const ui = currentUi(lua);
+    var opts = ui_mod.Ui.CardOptions{};
+    var name_buf: [64]u8 = undefined;
+
+    if (lua.isTable(1)) {
+        {
+            defer lua.pop(1);
+            if (lua.getField(1, "engine") == .number) {
+                const n = lua.toInteger(-1) catch 0;
+                if (n >= 1) opts.engine = @intCast(n - 1);
+            }
+        }
+        {
+            defer lua.pop(1);
+            if (lua.getField(1, "side") == .string) {
+                if (lua.toString(-1)) |side| {
+                    opts.side = if (std.mem.eql(u8, side, "black")) .Black else .White;
+                } else |_| {}
+            }
+        }
+        {
+            defer lua.pop(1);
+            if (lua.getField(1, "name") == .string) {
+                if (lua.toString(-1)) |name| {
+                    const n = @min(name.len, name_buf.len);
+                    @memcpy(name_buf[0..n], name[0..n]);
+                    opts.name = name_buf[0..n];
+                } else |_| {}
+            }
+        }
+        {
+            defer lua.pop(1);
+            if (lua.getField(1, "lines") == .number) {
+                const n = lua.toInteger(-1) catch 1;
+                opts.lines = @intCast(std.math.clamp(n, 1, engine_mod.max_multipv));
+            }
+        }
+        {
+            defer lua.pop(1);
+            if (lua.getField(1, "board") == .boolean) opts.board = lua.toBoolean(-1);
+        }
+        {
+            defer lua.pop(1);
+            if (lua.getField(1, "clock") == .boolean) opts.clock = lua.toBoolean(-1);
+        }
+    }
+
+    ui.engineCard(opts);
+    return 0;
+}
+
 fn uiEvalBar(lua: *Lua) i32 {
     currentUi(lua).evalBar(@floatCast(lua.optNumber(1) orelse 12));
     return 0;
@@ -235,6 +286,7 @@ const ui_fns = [_]zlua.FnReg{
     .{ .name = "available_height", .func = zlua.wrap(uiAvailableHeight) },
     .{ .name = "move_list", .func = zlua.wrap(uiMoveList) },
     .{ .name = "engine_lines", .func = zlua.wrap(uiEngineLines) },
+    .{ .name = "engine_card", .func = zlua.wrap(uiEngineCard) },
     .{ .name = "eval_bar", .func = zlua.wrap(uiEvalBar) },
     .{ .name = "clocks", .func = zlua.wrap(uiClocks) },
     .{ .name = "register_panel", .func = zlua.wrap(uiRegisterPanel) },
@@ -685,6 +737,31 @@ fn matchClock(lua: *Lua) i32 {
     return 1;
 }
 
+fn matchSeat(lua: *Lua) i32 {
+    const a = app();
+    const side_name = lua.checkString(1);
+    const side: chess.Color = if (std.mem.eql(u8, side_name, "black")) .Black else .White;
+
+    const player = if (a.match.state == .idle)
+        (if (side == .White) a.match.white else a.match.black)
+    else
+        a.match.seat(side);
+
+    lua.createTable(0, 3);
+
+    _ = lua.pushString(if (player.kind == .engine) "engine" else "human");
+    lua.setField(-2, "kind");
+
+    _ = lua.pushString(player.name(&a.engines));
+    lua.setField(-2, "name");
+
+    if (player.kind == .engine) {
+        lua.pushInteger(@intCast(player.engine + 1));
+        lua.setField(-2, "engine");
+    }
+    return 1;
+}
+
 fn matchSetPlayer(lua: *Lua) i32 {
     const m = &app().match;
     const side_name = lua.checkString(1);
@@ -737,6 +814,7 @@ const match_fns = [_]zlua.FnReg{
     .{ .name = "abort", .func = zlua.wrap(matchAbort) },
     .{ .name = "score", .func = zlua.wrap(matchScore) },
     .{ .name = "clock", .func = zlua.wrap(matchClock) },
+    .{ .name = "seat", .func = zlua.wrap(matchSeat) },
     .{ .name = "set_player", .func = zlua.wrap(matchSetPlayer) },
     .{ .name = "set_time", .func = zlua.wrap(matchSetTime) },
     .{ .name = "set_games", .func = zlua.wrap(matchSetGames) },

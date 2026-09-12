@@ -13,6 +13,7 @@ end
 
 local panels = {
     { id = "evaluation",  title = "Evaluation",  module = "panels.evaluation" },
+    { id = "engine_cards", title = "Search",     module = "panels.engine_cards" },
     { id = "engine_info", title = "Engines",     module = "panels.engine" },
     { id = "move_list",   title = "Moves",       module = "panels.moves" },
     { id = "settings",    title = "Settings",    module = "panels.settings" },
@@ -41,7 +42,7 @@ ui.set_view("game", {
     second = {
         split = "vertical",
         ratio = 0.55,
-        first  = { tabs = { "move_list", "match" } },
+        first  = { tabs = { "engine_cards", "move_list", "match" } },
         second = { tabs = { "engine_info", "log" } },
     },
 })
@@ -56,7 +57,7 @@ ui.set_view("analysis", {
     second = {
         split = "vertical",
         ratio = 0.58,
-        first  = { tabs = { "evaluation", "engine_info" } },
+        first  = { tabs = { "engine_cards", "evaluation", "engine_info" } },
         second = { tabs = { "move_list", "log" } },
     },
 })
@@ -94,6 +95,6 @@ app.map("t", function()
     app.new_tab()
 end)
 
-theme.set_default_piece_set("caliente")
+theme.set_default_piece_set("auto")
 
 app.log("UI loaded from " .. app.script_dir())

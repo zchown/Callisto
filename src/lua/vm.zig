@@ -58,6 +58,7 @@ const embedded_scripts = [_]Embedded{
     .{ .name = "init", .source = @embedFile("lua_init") },
     .{ .name = "panels.evaluation", .source = @embedFile("lua_panels_evaluation") },
     .{ .name = "panels.engine", .source = @embedFile("lua_panels_engine") },
+    .{ .name = "panels.engine_cards", .source = @embedFile("lua_panels_engine_cards") },
     .{ .name = "panels.moves", .source = @embedFile("lua_panels_moves") },
     .{ .name = "panels.settings", .source = @embedFile("lua_panels_settings") },
 };
@@ -267,7 +268,7 @@ pub const Vm = struct {
     }
 
     fn protected(self: *Vm, lua: *Lua, nargs: i32) !void {
-        const base = lua.getTop() - nargs; 
+        const base = lua.getTop() - nargs;
         lua.pushFunction(zlua.wrap(tracebackHandler));
         lua.insert(base);
 
