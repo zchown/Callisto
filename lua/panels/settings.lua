@@ -1,3 +1,5 @@
+-- Match setup and a few app-level controls.
+
 local M = {}
 
 local time_controls = {
@@ -78,6 +80,13 @@ function M.draw()
             end
         end
         ui.end_row()
+
+        local source = theme.piece_source()
+        if source == "svg" then
+            ui.label("rendering", "svg @ " .. theme.piece_render_size() .. "px", "good")
+        elseif source == "png" then
+            ui.label("rendering", "png bitmaps", "dim")
+        end
 
         local tint, changed = ui.checkbox("tint artwork with theme colours", theme.piece_tint())
         if changed then theme.set_piece_tint(tint) end

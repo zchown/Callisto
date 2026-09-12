@@ -126,7 +126,7 @@ pub const App = struct {
         if (self.piece_pref_set) return;
         if (name.len == 0) return;
 
-        const wanted = if (std.mem.eql(u8, name, "auto")) blk: {
+        const wanted = if (std.mem.eql(u8, name, "caliente")) blk: {
             if (self.piece_library.count == 0) return;
             break :blk self.piece_library.nameAt(0);
         } else name;

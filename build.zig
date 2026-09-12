@@ -97,6 +97,12 @@ pub fn build(b: *std.Build) void {
         });
     }
 
+    exe.addIncludePath(b.path("vendor/nanosvg"));
+    exe.addCSourceFile(.{
+        .file = b.path("src/c/nanosvg_impl.c"),
+        .flags = &.{ "-std=c99", "-fno-sanitize=undefined" },
+    });
+
     exe.linkLibC();
     b.installArtifact(exe);
 

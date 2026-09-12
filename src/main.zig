@@ -91,6 +91,10 @@ pub fn main() !void {
 
         app.update();
         vm.update();
+
+        if (app.piece_library.applyPending()) {
+            app.log.print("ui", .note, "pieces re-rendered at {d}px", .{app.piece_library.renderSize()});
+        }
         for (registry.slice()) |p| p.update(app, dt);
 
         rl.beginDrawing();
