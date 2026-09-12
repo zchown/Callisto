@@ -5,6 +5,7 @@ const App = @import("../app.zig").App;
 pub const max_panels = 32;
 
 pub const Panel = struct {
+    name: []const u8 = "",
     title: [:0]const u8,
     ptr: *anyopaque,
     vtable: *const VTable,
@@ -29,6 +30,10 @@ pub const Panel = struct {
     }
 
     pub fn from(instance: anytype, title: [:0]const u8) Panel {
+        return named(instance, title, title);
+    }
+
+    pub fn named(instance: anytype, name: []const u8, title: [:0]const u8) Panel {
         const Ptr = @TypeOf(instance);
         const T = @typeInfo(Ptr).pointer.child;
 
@@ -39,20 +44,21 @@ pub const Panel = struct {
             fn updateImpl(ctx: *anyopaque, app: *App, dt: f32) void {
                 T.update(@ptrCast(@alignCast(ctx)), app, dt);
             }
-            fn closeImpl(ctx: *anyopaque, app: *App) void {
+            fn onCloseImpl(ctx: *anyopaque, app: *App) void {
                 T.onClose(@ptrCast(@alignCast(ctx)), app);
             }
 
             const vtable = VTable{
                 .draw = drawImpl,
                 .update = if (@hasDecl(T, "update")) updateImpl else null,
-                .onClose = if (@hasDecl(T, "onClose")) closeImpl else null,
+                .onClose = if (@hasDecl(T, "onClose")) onCloseImpl else null,
             };
         };
 
         const owns_bg = comptime if (@hasDecl(T, "draws_own_background")) T.draws_own_background else false;
 
         return .{
+            .name = name,
             .title = title,
             .ptr = @ptrCast(instance),
             .vtable = &glue.vtable,
@@ -80,5 +86,12 @@ pub const Registry = struct {
 
     pub fn slice(self: *Registry) []Panel {
         return self.items[0..self.count];
+    }
+
+    pub fn indexOf(self: *Registry, name: []const u8) ?usize {
+        for (self.items[0..self.count], 0..) |p, i| {
+            if (std.mem.eql(u8, p.name, name)) return i;
+        }
+        return null;
     }
 };

@@ -8,10 +8,15 @@
             .url = "git+https://github.com/raylib-zig/raylib-zig?ref=devel#163b1ef2e993fe7cc7c76bb3213d98612f4b7676",
             .hash = "raylib_zig-5.6.0-dev-KE8REGNJBQDSjjyCmf4ATVQtk_OaBpY0B7kBxwSOPEGZ",
         },
+        .zlua = .{
+            .url = "git+https://github.com/natecraddock/ziglua?ref=zig-0.15.2#b6e895f73e55d793e61844a8bab17a036631f6be",
+            .hash = "zlua-0.1.0-hGRpCxFDBQBTLH7HYIvzCfvr_8xFE6kqLzLFxkcgdWNl",
+        },
     },
     .paths = .{
         "build.zig",
         "build.zig.zon",
         "src",
+        "lua",
     },
 }

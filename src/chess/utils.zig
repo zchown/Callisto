@@ -14,7 +14,7 @@ pub const num_files = 8;
 pub const num_ranks = 8;
 pub const max_pieces = 32;
 
-pub const max_moves = 1024;
+pub const max_moves = 256;
 
 // zig fmt: off
 pub const Squares = enum(u6) {

@@ -17,9 +17,15 @@ const analysis_panel = @import("ui/panels/analysis.zig");
 const engines_panel = @import("ui/panels/engines.zig");
 const match_panel = @import("ui/panels/match.zig");
 const log_panel = @import("ui/panels/log.zig");
+const lua_panel = @import("ui/panels/lua_panel.zig");
+
+const vm_mod = @import("lua/vm.zig");
+const api = @import("lua/api.zig");
+const layout_spec = @import("lua/layout_spec.zig");
 
 const toolbar_h: f32 = 36.0;
 const statusbar_h: f32 = 22.0;
+const error_bar_h: f32 = 26.0;
 
 pub fn main() !void {
     var gpa: std.heap.GeneralPurposeAllocator(.{}) = .init;
@@ -53,22 +59,43 @@ pub fn main() !void {
 
     var registry = panel_mod.Registry{};
     const ids = views_mod.Ids{
-        .home = registry.add(panel_mod.Panel.from(&home, "Home")),
-        .board = registry.add(panel_mod.Panel.from(&board, "Board")),
-        .moves = registry.add(panel_mod.Panel.from(&moves, "Moves")),
-        .analysis = registry.add(panel_mod.Panel.from(&analysis, "Analysis")),
-        .engines = registry.add(panel_mod.Panel.from(&engines, "Engines")),
-        .match = registry.add(panel_mod.Panel.from(&match, "Match")),
-        .log = registry.add(panel_mod.Panel.from(&logs, "UCI log")),
+        .home = registry.add(panel_mod.Panel.named(&home, "home", "Home")),
+        .board = registry.add(panel_mod.Panel.named(&board, "board", "Board")),
+        .moves = registry.add(panel_mod.Panel.named(&moves, "moves", "Moves")),
+        .analysis = registry.add(panel_mod.Panel.named(&analysis, "analysis", "Analysis")),
+        .engines = registry.add(panel_mod.Panel.named(&engines, "engines", "Engines")),
+        .match = registry.add(panel_mod.Panel.named(&match, "match", "Match")),
+        .log = registry.add(panel_mod.Panel.named(&logs, "log", "UCI log")),
     };
 
+    // -- Lua ---------------------------------------------------------------
+    const vm = try allocator.create(vm_mod.Vm);
+    defer {
+        vm.deinit();
+        allocator.destroy(vm);
+    }
+    vm.init(allocator, app);
+
+    var slots = lua_panel.Slots{};
     var views = try views_mod.Views.build(ids);
+
+    vm.load();
+    syncLuaPanels(vm, &registry, &slots);
+    applyLuaViews(vm, &registry, &views);
 
     while (!rl.windowShouldClose() and !app.quit_requested) {
         const dt = rl.getFrameTime();
 
-        handleShortcuts(app, &board);
+        if (handleReload(vm, &registry, &slots, &views)) continue;
+
+        handleShortcuts(app, vm, &board);
+
+        // Text boxes set this while drawing; clear it once shortcuts have had
+        // their look at the previous frame's value.
+        widget.keyboard_captured = false;
+
         app.update();
+        vm.update();
         for (registry.slice()) |p| p.update(app, dt);
 
         rl.beginDrawing();
@@ -80,16 +107,14 @@ pub fn main() !void {
 
         rl.setMouseCursor(.default);
 
-        drawToolbar(app, .{ .x = 0, .y = 0, .width = w, .height = toolbar_h });
+        var body = rl.Rectangle{ .x = 0, .y = 0, .width = w, .height = h };
+        drawToolbar(app, widget.cutTop(&body, toolbar_h));
+        _ = widget.cutBottom(&body, statusbar_h);
 
-        views.current(app.view).draw(app, &registry, .{
-            .x = 0,
-            .y = toolbar_h,
-            .width = w,
-            .height = @max(h - toolbar_h - statusbar_h, 0),
-        });
+        if (!vm.ok) drawErrorBar(app, vm, widget.cutTop(&body, error_bar_h));
 
-        drawStatusBar(app, .{ .x = 0, .y = h - statusbar_h, .width = w, .height = statusbar_h });
+        views.current(app.view).draw(app, &registry, body);
+        drawStatusBar(app, .{ .x = 0, .y = h - statusbar_h, .width = w, .height = statusbar_h }, vm);
 
         if (app.show_help) drawHelp(app, w, h);
     }
@@ -117,8 +142,11 @@ fn tryLoadFont(size: i32) ?rl.Font {
     return null;
 }
 
-fn handleShortcuts(app: *App, board: *board_view.BoardView) void {
+fn handleShortcuts(app: *App, vm: *vm_mod.Vm, board: *board_view.BoardView) void {
     if (widget.keyboard_captured) return;
+
+    // Scripts get first refusal on letter and digit keys.
+    if (dispatchLuaKeys(vm)) return;
 
     if (rl.isKeyPressed(.left)) app.game.back();
     if (rl.isKeyPressed(.right)) app.game.forward();
@@ -156,6 +184,7 @@ fn drawToolbar(app: *App, r: rl.Rectangle) void {
     const h: f32 = 24;
     var bar = rl.Rectangle{ .x = r.x + 8, .y = r.y + (r.height - h) / 2, .width = r.width - 16, .height = h };
 
+    // View switcher.
     inline for (.{ View.home, View.game, View.analysis }) |v| {
         const btn = widget.cutLeft(&bar, 78);
         if (widget.toggle(t, btn, v.label(), app.view == v)) app.view = v;
@@ -197,7 +226,7 @@ fn drawToolbar(app: *App, r: rl.Rectangle) void {
     }
 }
 
-fn drawStatusBar(app: *App, r: rl.Rectangle) void {
+fn drawStatusBar(app: *App, r: rl.Rectangle, vm: *vm_mod.Vm) void {
     const t = app.theme;
     rl.drawRectangleRec(r, t.panel);
     rl.drawRectangleRec(.{ .x = r.x, .y = r.y, .width = r.width, .height = 1 }, t.border);
@@ -214,7 +243,101 @@ fn drawStatusBar(app: *App, r: rl.Rectangle) void {
         y,
         t.small_font,
         t.text_dim,
-        widget.zBuf(&buf, "{d} engine(s)   {d} fps", .{ app.engines.count, rl.getFPS() }),
+        widget.zBuf(&buf, "{s}   {d} engine(s)   {d} fps", .{
+            if (vm.from_disk) "lua: disk" else "lua: embedded",
+            app.engines.count,
+            rl.getFPS(),
+        }),
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Lua integration
+// ---------------------------------------------------------------------------
+
+/// Give every Lua-registered panel a slot in the Zig registry. A slot is handed
+/// out once per panel name and kept across reloads, so view specs stay valid.
+fn syncLuaPanels(vm: *vm_mod.Vm, registry: *panel_mod.Registry, slots: *lua_panel.Slots) void {
+    for (0..vm.panel_count) |i| {
+        const p = vm.panelAt(i) orelse continue;
+        if (p.registry_index != null) continue;
+
+        const slot = slots.make(vm, i) orelse continue;
+        p.registry_index = registry.add(panel_mod.Panel.named(slot, p.nameSlice(), p.titleZ()));
+    }
+}
+
+fn applyLuaViews(vm: *vm_mod.Vm, registry: *panel_mod.Registry, views: *views_mod.Views) void {
+    if (!vm.views_dirty) return;
+    vm.views_dirty = false;
+    const n = layout_spec.apply(vm, registry, views);
+    if (n > 0) vm.app.log.print("lua", .note, "{d} view(s) described by script", .{n});
+}
+
+/// Returns true when the VM was reloaded this frame, so the caller can skip the
+/// rest of the frame rather than draw against a half-built state.
+fn handleReload(
+    vm: *vm_mod.Vm,
+    registry: *panel_mod.Registry,
+    slots: *lua_panel.Slots,
+    views: *views_mod.Views,
+) bool {
+    const asked = api.takeReloadRequest() or
+        (!widget.keyboard_captured and rl.isKeyPressed(.f5));
+    if (!asked) {
+        applyLuaViews(vm, registry, views);
+        return false;
+    }
+
+    vm.reload();
+    syncLuaPanels(vm, registry, slots);
+    applyLuaViews(vm, registry, views);
+    return true;
+}
+
+/// Letters and digits are offered to script bindings first. raylib's key codes
+/// are ASCII for both ranges, so the mapping is arithmetic.
+fn dispatchLuaKeys(vm: *vm_mod.Vm) bool {
+    if (vm.keymap_count == 0) return false;
+
+    var i: u8 = 0;
+    while (i < 26) : (i += 1) {
+        const key: rl.KeyboardKey = @enumFromInt(@as(i32, 'A') + @as(i32, i));
+        if (!rl.isKeyPressed(key)) continue;
+        const name = [_]u8{'a' + i};
+        if (vm.fireKey(&name)) return true;
+    }
+
+    var d: u8 = 0;
+    while (d < 10) : (d += 1) {
+        const key: rl.KeyboardKey = @enumFromInt(@as(i32, '0') + @as(i32, d));
+        if (!rl.isKeyPressed(key)) continue;
+        const name = [_]u8{'0' + d};
+        if (vm.fireKey(&name)) return true;
+    }
+
+    return false;
+}
+
+fn drawErrorBar(app: *App, vm: *vm_mod.Vm, r: rl.Rectangle) void {
+    const t = app.theme;
+    rl.drawRectangleRec(r, rl.Color{ .r = 70, .g = 30, .b = 30, .a = 255 });
+    rl.drawRectangleRec(.{ .x = r.x, .y = r.y + r.height - 1, .width = r.width, .height = 1 }, t.bad);
+
+    var body = widget.inset(r, 4);
+    const btn = widget.cutRight(&body, 76);
+    if (widget.button(t, btn, "reload", .danger)) vm.reload();
+
+    var buf: [320]u8 = undefined;
+    var clip: [340]u8 = undefined;
+    widget.textClipped(
+        body.x + 4,
+        body.y + (body.height - t.smallF()) / 2,
+        body.width - 8,
+        t.small_font,
+        t.text_bright,
+        widget.zSlice(&buf, vm.errSlice()),
+        &clip,
     );
 }
 
@@ -223,7 +346,7 @@ fn drawHelp(app: *App, w: f32, h: f32) void {
     rl.drawRectangleRec(.{ .x = 0, .y = 0, .width = w, .height = h }, rl.fade(t.bg, 0.85));
 
     const bw: f32 = 520;
-    const bh: f32 = 400;
+    const bh: f32 = 440;
     const r = rl.Rectangle{ .x = (w - bw) / 2, .y = (h - bh) / 2, .width = bw, .height = bh };
     widget.frame(r, 0.04, t.panel, t.border);
 
@@ -236,6 +359,7 @@ fn drawHelp(app: *App, w: f32, h: f32) void {
         .{ "1 / 2 / 3", "home, game, analysis views" },
         .{ "f", "flip the board" },
         .{ "space", "toggle analysis" },
+        .{ "F5", "reload the Lua UI" },
         .{ "ctrl + n", "new game" },
         .{ "ctrl + c", "copy the FEN" },
         .{ "esc", "clear selection, preview and arrows" },
@@ -251,6 +375,7 @@ fn drawHelp(app: *App, w: f32, h: f32) void {
         y += 22;
     }
 
-    widget.text(r.x + 20, r.y + bh - 30, t.small_font, t.text_dim, "engines: point at any UCI binary, or drop one onto the window");
+    widget.text(r.x + 20, r.y + bh - 48, t.small_font, t.text_dim, "scripts bind their own keys; see lua/init.lua");
+    widget.text(r.x + 20, r.y + bh - 28, t.small_font, t.text_dim, "engines: point at any UCI binary, or drop one onto the window");
     if (rl.isMouseButtonPressed(.left)) app.show_help = false;
 }

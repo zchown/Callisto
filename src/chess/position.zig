@@ -261,7 +261,7 @@ pub const UndoInfo = struct {
 };
 
 pub const GameState = struct {
-    history: [256]UndoInfo,
+    history: [1024]UndoInfo,
     cur_position: Position,
     ply: usize,
     to_move: Color,
@@ -274,7 +274,7 @@ pub const GameState = struct {
 
     pub fn init() GameState {
         return .{
-            .history = std.mem.zeroes([256]UndoInfo),
+            .history = std.mem.zeroes([1024]UndoInfo),
             .cur_position = Position.init(),
             .ply = 0,
             .to_move = .White,

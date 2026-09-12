@@ -1,5 +1,13 @@
 const std = @import("std");
 
+const lua_scripts = [_]struct { name: []const u8, path: []const u8 }{
+    .{ .name = "lua_init", .path = "lua/init.lua" },
+    .{ .name = "lua_panels_evaluation", .path = "lua/panels/evaluation.lua" },
+    .{ .name = "lua_panels_engine", .path = "lua/panels/engine.lua" },
+    .{ .name = "lua_panels_moves", .path = "lua/panels/moves.lua" },
+    .{ .name = "lua_panels_settings", .path = "lua/panels/settings.lua" },
+};
+
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -77,8 +85,26 @@ pub fn build(b: *std.Build) void {
     exe.root_module.addImport("raylib", raylib);
     exe.root_module.addImport("chess", chess);
 
+    const lua_dep = b.dependency("zlua", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    exe.root_module.addImport("zlua", lua_dep.module("zlua"));
+
+    for (lua_scripts) |script| {
+        exe.root_module.addAnonymousImport(script.name, .{
+            .root_source_file = b.path(script.path),
+        });
+    }
+
     exe.linkLibC();
     b.installArtifact(exe);
+
+    b.installDirectory(.{
+        .source_dir = b.path("lua"),
+        .install_dir = .bin,
+        .install_subdir = "lua",
+    });
 
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
