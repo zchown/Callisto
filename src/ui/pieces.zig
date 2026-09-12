@@ -3,6 +3,7 @@ const rl = @import("raylib");
 const chess = @import("chess");
 const widget = @import("widget.zig");
 const theme_mod = @import("theme.zig");
+const piece_set = @import("piece_set.zig");
 
 const Theme = theme_mod.Theme;
 const Pieces = chess.Pieces;
@@ -38,7 +39,15 @@ const Ctx = struct {
 };
 
 pub fn draw(kind: Pieces, color: Color, cx: f32, cy: f32, size: f32, t: Theme) void {
+    if (t.pieces) |set| {
+        if (set.draw(kind, color, cx, cy, size, tintFor(color, t))) return;
+    }
     drawTinted(kind, cx, cy, size, fillColor(color, t), edgeColor(color, t));
+}
+
+fn tintFor(color: Color, t: Theme) rl.Color {
+    if (!t.piece_tint) return .{ .r = 255, .g = 255, .b = 255, .a = 255 };
+    return fillColor(color, t);
 }
 
 pub fn drawTinted(kind: Pieces, cx: f32, cy: f32, size: f32, fill: rl.Color, edge: rl.Color) void {
@@ -49,6 +58,9 @@ pub fn drawTinted(kind: Pieces, cx: f32, cy: f32, size: f32, fill: rl.Color, edg
 }
 
 pub fn drawGhost(kind: Pieces, color: Color, cx: f32, cy: f32, size: f32, t: Theme) void {
+    if (t.pieces) |set| {
+        if (set.draw(kind, color, cx, cy, size, rl.fade(tintFor(color, t), 0.32))) return;
+    }
     drawTinted(
         kind,
         cx,

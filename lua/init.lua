@@ -25,12 +25,18 @@ for _, entry in ipairs(panels) do
     end
 end
 
-ui.set_view("home", { panel = "home" })
+ui.set_view("home", {
+    label = "Home",
+    icon  = "home",
+    panel = "home",
+})
 
 ui.set_view("game", {
+    label = "Board",
+    icon  = "board",
     split = "horizontal",
     ratio = 0.62,
-    min_first = 280,
+    min_first = 300,
     first = { panel = "board" },
     second = {
         split = "vertical",
@@ -41,16 +47,33 @@ ui.set_view("game", {
 })
 
 ui.set_view("analysis", {
+    label = "Analysis",
+    icon  = "analysis",
     split = "horizontal",
     ratio = 0.58,
-    min_first = 280,
+    min_first = 300,
     first = { panel = "board" },
     second = {
         split = "vertical",
         ratio = 0.58,
         first  = { tabs = { "evaluation", "engine_info" } },
-        second = { tabs = { "move_list", "settings", "log" } },
+        second = { tabs = { "move_list", "log" } },
     },
+})
+
+ui.set_view("engines", {
+    label = "Engines",
+    icon  = "engine",
+    split = "vertical",
+    ratio = 0.62,
+    first  = { tabs = { "engine_info", "engines" } },
+    second = { panel = "log" },
+})
+
+ui.set_view("settings", {
+    label = "Settings",
+    icon  = "settings",
+    panel = "settings",
 })
 
 app.map("a", function()
@@ -66,5 +89,11 @@ app.map("c", function()
     app.clipboard(chess.fen())
     app.set_status("FEN copied")
 end)
+
+app.map("t", function()
+    app.new_tab()
+end)
+
+theme.set_default_piece_set("caliente")
 
 app.log("UI loaded from " .. app.script_dir())

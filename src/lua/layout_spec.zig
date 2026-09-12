@@ -7,6 +7,7 @@ const Vm = vm_mod.Vm;
 const panel_mod = @import("../ui/panel.zig");
 const layout_mod = @import("../ui/layout.zig");
 const views_mod = @import("../ui/views.zig");
+const icons = @import("../ui/icons.zig");
 
 const Registry = panel_mod.Registry;
 const Layout = layout_mod.Layout;
@@ -18,7 +19,7 @@ pub const Error = error{
     LayoutFull,
 };
 
-pub fn apply(vm: *Vm, reg: *Registry, views: *views_mod.Views) usize {
+pub fn apply(vm: *Vm, reg: *Registry, views: *views_mod.ViewSet) usize {
     const lua = vm.lua orelse return 0;
     if (vm.views_ref == vm_mod.no_ref) return 0;
 
@@ -30,32 +31,66 @@ pub fn apply(vm: *Vm, reg: *Registry, views: *views_mod.Views) usize {
     const table = lua.getTop();
 
     var applied: usize = 0;
-    const names = [_][:0]const u8{ "home", "game", "analysis" };
-    const targets = [_]*Layout{ &views.home, &views.game, &views.analysis };
 
-    for (names, targets) |name, target| {
-        const top = lua.getTop();
-        defer lua.setTop(top);
+    lua.pushNil();
+    while (lua.next(table)) {
+        const spec = lua.getTop();
+        defer lua.setTop(spec - 1); 
 
-        if (lua.getField(table, name) != .table) continue;
+        if (lua.typeOf(-2) != .string or !lua.isTable(spec)) continue;
+        const id = lua.toString(-2) catch continue;
 
         var candidate = Layout{};
-        const root = buildNode(lua, reg, &candidate, lua.getTop()) catch |err| {
-            vm.app.log.print("lua", .err, "view '{s}' ignored: {s}", .{ name, @errorName(err) });
+        const root = buildNode(lua, reg, &candidate, spec) catch |err| {
+            vm.app.log.print("lua", .err, "view '{s}' ignored: {s}", .{ id, @errorName(err) });
             continue;
         };
         candidate.root = root;
 
-        target.* = candidate;
+        const view = views.ensure(id) orelse {
+            vm.app.log.print("lua", .err, "too many views for '{s}'", .{id});
+            continue;
+        };
+        view.layout = candidate;
+        view.ready = true;
+        applyChrome(lua, spec, view);
         applied += 1;
     }
 
     return applied;
 }
 
+fn applyChrome(lua: *Lua, spec: i32, view: *views_mod.View) void {
+    {
+        const top = lua.getTop();
+        defer lua.setTop(top);
+        if (lua.getField(spec, "label") == .string) {
+            if (lua.toString(-1)) |label| {
+                views_mod.ViewSet.setLabel(view, label);
+            } else |_| {}
+        }
+    }
+    {
+        const top = lua.getTop();
+        defer lua.setTop(top);
+        if (lua.getField(spec, "icon") == .string) {
+            if (lua.toString(-1)) |name| {
+                view.icon = icons.Icon.parse(name);
+            } else |_| {}
+        }
+    }
+    {
+        const top = lua.getTop();
+        defer lua.setTop(top);
+        const kind = lua.getField(spec, "sidebar");
+        if (kind == .boolean) view.in_sidebar = lua.toBoolean(-1);
+    }
+}
+
 fn buildNode(lua: *Lua, reg: *Registry, layout: *Layout, index: i32) Error!NodeId {
     if (!lua.isTable(index)) return error.BadSpec;
 
+    // { panel = "board" }
     {
         const top = lua.getTop();
         defer lua.setTop(top);
@@ -67,6 +102,7 @@ fn buildNode(lua: *Lua, reg: *Registry, layout: *Layout, index: i32) Error!NodeI
         }
     }
 
+    // { tabs = { "moves", "match" } }
     {
         const top = lua.getTop();
         defer lua.setTop(top);
@@ -94,6 +130,7 @@ fn buildNode(lua: *Lua, reg: *Registry, layout: *Layout, index: i32) Error!NodeI
         }
     }
 
+    // { split = "horizontal", ratio = .., first = .., second = .. }
     const top = lua.getTop();
     defer lua.setTop(top);
 

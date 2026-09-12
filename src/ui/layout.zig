@@ -78,6 +78,20 @@ pub const Layout = struct {
         return id;
     }
 
+    pub fn containsPanel(self: *const Layout, panel_index: usize) bool {
+        for (self.nodes[0..self.count]) |node| {
+            switch (node) {
+                .leaf => |l| {
+                    for (l.panels[0..l.count]) |p| {
+                        if (p == panel_index) return true;
+                    }
+                },
+                .split => {},
+            }
+        }
+        return false;
+    }
+
     pub fn draw(self: *Layout, app: *App, reg: *Registry, bounds: rl.Rectangle) void {
         if (self.count == 0) return;
 

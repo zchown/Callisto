@@ -1,4 +1,5 @@
 const rl = @import("raylib");
+const piece_set = @import("piece_set.zig");
 
 pub fn rgb(hex: u24) rl.Color {
     return .{
@@ -15,26 +16,40 @@ pub fn rgba(hex: u24, a: u8) rl.Color {
     return c;
 }
 
+pub fn roundness(r: rl.Rectangle, px: f32) f32 {
+    const short = @min(r.width, r.height);
+    if (short <= 0) return 0;
+    return @min(px * 2.0 / short, 1.0);
+}
+
 pub const Theme = struct {
-    bg: rl.Color = rgb(0x0F1319),
-    panel: rl.Color = rgb(0x171C24),
-    panel_alt: rl.Color = rgb(0x1E2530),
-    row_alt: rl.Color = rgb(0x1A212B),
-    border: rl.Color = rgb(0x2B3543),
-    divider: rl.Color = rgb(0x39465A),
-    separator: rl.Color = rgb(0x232C38),
-    overlay: rl.Color = rgba(0x0F1319, 210),
+    bg: rl.Color = rgb(0x101216),
+    sidebar: rl.Color = rgb(0x0C0E12),
+    panel: rl.Color = rgb(0x171A21),
+    panel_alt: rl.Color = rgb(0x1E222B),
+    elevated: rl.Color = rgb(0x252A35),
+    row_alt: rl.Color = rgb(0x1A1E26),
 
-    text: rl.Color = rgb(0xC6D0DC),
-    text_dim: rl.Color = rgb(0x76838F),
-    text_bright: rl.Color = rgb(0xEDF2F7),
+    border: rl.Color = rgb(0x272C36),
+    border_soft: rl.Color = rgb(0x1F242C),
+    divider: rl.Color = rgb(0x39414F),
+    separator: rl.Color = rgb(0x222730),
+    overlay: rl.Color = rgba(0x08090C, 220),
 
-    accent: rl.Color = rgb(0x5FA8D3),
-    accent_dim: rl.Color = rgb(0x35617C),
+    text: rl.Color = rgb(0xC8CEDA),
+    text_dim: rl.Color = rgb(0x7B8598),
+    text_bright: rl.Color = rgb(0xEDF1F7),
 
-    good: rl.Color = rgb(0x7FB069),
-    bad: rl.Color = rgb(0xD1655B),
+    accent: rl.Color = rgb(0x4DABF7),
+    accent_dim: rl.Color = rgb(0x1D3B57),
+    accent_soft: rl.Color = rgba(0x4DABF7, 38),
+
+    good: rl.Color = rgb(0x51CF8F),
+    bad: rl.Color = rgb(0xE5646B),
     warn: rl.Color = rgb(0xE0A94A),
+
+    pieces: ?*const piece_set.PieceSet = null,
+    piece_tint: bool = false,
 
     // Board
     sq_light: rl.Color = rgb(0xD8D3C7),
@@ -48,21 +63,32 @@ pub const Theme = struct {
     piece_black_edge: rl.Color = rgb(0xB9BFC7),
 
     hl_last: rl.Color = rgb(0xE0A94A),
-    hl_select: rl.Color = rgb(0x5FA8D3),
-    hl_check: rl.Color = rgb(0xD1655B),
+    hl_select: rl.Color = rgb(0x4DABF7),
+    hl_check: rl.Color = rgb(0xE5646B),
     hl_legal: rl.Color = rgb(0x1E2530),
     hl_hover: rl.Color = rgb(0xEDF2F7),
 
     arrow_user: rl.Color = rgb(0xE0A94A),
-    arrow_pv: rl.Color = rgb(0x5FA8D3),
-    arrow_pv_alt: rl.Color = rgb(0x8E7CC3),
+    arrow_pv: rl.Color = rgb(0x4DABF7),
+    arrow_pv_alt: rl.Color = rgb(0x9B87D6),
 
-    row_h: f32 = 22,
-    pad: f32 = 8,
+    row_h: f32 = 26,
+    pad: f32 = 12,
+    card_pad: f32 = 16,
+    gap: f32 = 10,
     radius: f32 = 0.25,
-    font_size: i32 = 16,
+    radius_px: f32 = 7,
+    card_radius_px: f32 = 10,
+
+    font_size: i32 = 15,
     small_font: i32 = 13,
-    big_font: i32 = 22,
+    big_font: i32 = 19,
+    title_font: i32 = 26,
+
+    sidebar_w: f32 = 188,
+    sidebar_w_collapsed: f32 = 56,
+    tabbar_h: f32 = 38,
+    statusbar_h: f32 = 26,
 
     pub fn evalColor(self: Theme, cp: i32) rl.Color {
         if (cp > 30) return self.good;
@@ -76,6 +102,10 @@ pub const Theme = struct {
 
     pub fn smallF(self: Theme) f32 {
         return @floatFromInt(self.small_font);
+    }
+
+    pub fn bigF(self: Theme) f32 {
+        return @floatFromInt(self.big_font);
     }
 };
 

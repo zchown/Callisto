@@ -109,16 +109,30 @@ pub fn separator(t: Theme, x: f32, y: f32, w: f32) void {
     rl.drawLineEx(.{ .x = x, .y = y }, .{ .x = x + w, .y = y }, 1.0, t.separator);
 }
 
-pub fn frame(r: rl.Rectangle, roundness: f32, fill: rl.Color, border: rl.Color) void {
+pub fn frame(r: rl.Rectangle, radius_px: f32, fill: rl.Color, border: rl.Color) void {
     if (r.width <= 0 or r.height <= 0) return;
-    rl.drawRectangleRounded(r, roundness, 6, border);
+    const round = theme_mod.roundness(r, radius_px);
+    rl.drawRectangleRounded(r, round, 8, border);
     const inner = inset(r, 1);
     if (inner.width > 0 and inner.height > 0 and fill.a > 0) {
-        rl.drawRectangleRounded(inner, roundness, 6, fill);
+        rl.drawRectangleRounded(inner, theme_mod.roundness(inner, radius_px - 1), 8, fill);
     }
 }
 
+pub fn surface(r: rl.Rectangle, radius_px: f32, fill: rl.Color) void {
+    if (r.width <= 0 or r.height <= 0 or fill.a == 0) return;
+    rl.drawRectangleRounded(r, theme_mod.roundness(r, radius_px), 8, fill);
+}
+
+pub fn card(t: Theme, r: rl.Rectangle) rl.Rectangle {
+    frame(r, t.card_radius_px, t.panel, t.border_soft);
+    return inset(r, t.card_pad);
+}
+
+pub var input_blocked: bool = false;
+
 pub fn hovered(r: rl.Rectangle) bool {
+    if (input_blocked) return false;
     return rl.checkCollisionPointRec(rl.getMousePosition(), r);
 }
 
@@ -152,8 +166,8 @@ pub fn buttonEx(t: Theme, r: rl.Rectangle, label: [:0]const u8, style: Style, en
 
     var fill = switch (style) {
         .normal => t.panel_alt,
-        .primary => t.accent_dim,
-        .danger => rl.Color{ .r = 90, .g = 40, .b = 40, .a = 255 },
+        .primary => t.accent,
+        .danger => rl.Color{ .r = 82, .g = 38, .b = 42, .a = 255 },
         .ghost => rl.Color{ .r = 0, .g = 0, .b = 0, .a = 0 },
     };
     var line = switch (style) {
@@ -161,23 +175,28 @@ pub fn buttonEx(t: Theme, r: rl.Rectangle, label: [:0]const u8, style: Style, en
         .danger => t.bad,
         else => t.border,
     };
-    var fg = if (style == .primary) t.text_bright else t.text;
+    var fg = if (style == .primary) t.bg else t.text;
 
     if (!enabled) {
         fill = t.panel;
         line = t.border;
         fg = t.text_dim;
     } else if (down) {
-        fill = t.accent;
-        fg = t.bg;
+        fill = if (style == .primary) t.accent_dim else t.elevated;
+        fg = if (style == .primary) t.text_bright else t.text_bright;
         line = t.accent;
     } else if (over) {
-        fill = if (style == .ghost) t.panel_alt else t.accent_dim;
-        fg = t.text_bright;
-        line = t.accent;
+        fill = switch (style) {
+            .primary => t.accent,
+            .ghost => t.panel_alt,
+            .danger => rl.Color{ .r = 104, .g = 46, .b = 50, .a = 255 },
+            .normal => t.elevated,
+        };
+        fg = if (style == .primary) t.bg else t.text_bright;
+        line = if (style == .normal) t.divider else line;
     }
 
-    frame(r, t.radius, fill, line);
+    frame(r, t.radius_px, fill, line);
 
     const size = t.font_size;
     text(r.x + (r.width - measure(label, size)) / 2, r.y + (r.height - @as(f32, @floatFromInt(size))) / 2, size, fg, label);
@@ -199,7 +218,7 @@ pub fn checkBox(t: Theme, r: rl.Rectangle, label: [:0]const u8, value: *bool) bo
     };
     const over = hovered(r);
 
-    frame(box, 0.2, if (value.*) t.accent else t.panel_alt, if (over) t.accent else t.border);
+    frame(box, 4, if (value.*) t.accent else t.panel_alt, if (over) t.accent else t.border);
     if (value.*) {
         rl.drawLineEx(
             .{ .x = box.x + 4, .y = box.y + box_size / 2 },
@@ -226,7 +245,7 @@ pub fn checkBox(t: Theme, r: rl.Rectangle, label: [:0]const u8, value: *bool) bo
 
 pub fn selector(t: Theme, r: rl.Rectangle, label: [:0]const u8, index: *usize, count: usize) bool {
     if (count == 0) {
-        frame(r, t.radius, t.panel, t.border);
+        frame(r, t.radius_px, t.panel, t.border);
         textIn(r, 8, t.small_font, t.text_dim, label);
         return false;
     }
@@ -236,7 +255,7 @@ pub fn selector(t: Theme, r: rl.Rectangle, label: [:0]const u8, index: *usize, c
     const left = cutLeft(&body, arrow_w);
     const right = cutRight(&body, arrow_w);
 
-    frame(r, t.radius, t.panel_alt, if (hovered(r)) t.accent else t.border);
+    frame(r, t.radius_px, t.panel_alt, if (hovered(r)) t.accent else t.border);
 
     var changed = false;
     const can_prev = count > 1;
@@ -286,7 +305,7 @@ pub fn stepper(t: Theme, r: rl.Rectangle, value: *i32, min: i32, max: i32, step:
     const minus = cutLeft(&body, @min(r.height, 24));
     const plus = cutRight(&body, @min(r.height, 24));
 
-    frame(r, t.radius, t.panel_alt, if (hovered(r)) t.accent else t.border);
+    frame(r, t.radius_px, t.panel_alt, if (hovered(r)) t.accent else t.border);
 
     textCentered(minus.x + minus.width / 2, minus.y + (minus.height - t.smallF()) / 2, t.small_font, if (hovered(minus)) t.accent else t.text_dim, "-");
     textCentered(plus.x + plus.width / 2, plus.y + (plus.height - t.smallF()) / 2, t.small_font, if (hovered(plus)) t.accent else t.text_dim, "+");
@@ -460,6 +479,7 @@ pub const TextInput = struct {
 
         var submitted = false;
         if (self.focused) {
+            keyboard_captured = true;
             while (true) {
                 const c = rl.getCharPressed();
                 if (c == 0) break;
@@ -488,7 +508,7 @@ pub const TextInput = struct {
 
         frame(
             r,
-            t.radius,
+            t.radius_px,
             if (self.enabled) t.panel_alt else t.panel,
             if (self.focused) t.accent else if (over) t.divider else t.border,
         );

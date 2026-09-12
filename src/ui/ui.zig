@@ -4,7 +4,7 @@ const chess = @import("chess");
 
 const App = @import("../app.zig").App;
 const widget = @import("widget.zig");
-const pieces = @import("pieces.zig");
+const pieces_mod = @import("pieces.zig");
 const theme_mod = @import("theme.zig");
 const match_mod = @import("../match.zig");
 const engine_mod = @import("../engine/engine.zig");
@@ -470,6 +470,8 @@ pub const Ui = struct {
     pub fn piece(self: *Ui, kind: chess.Pieces, color: chess.Color, size: f32) void {
         const r = self.take(size, size);
         if (!self.visible(r)) return;
+        var pieces = try pieces_mod.PieceSet.load(std.heap.page_allocator, "assets/pieces/mp-chess");
+        defer pieces.unload();
         pieces.draw(kind, color, r.x + size / 2, r.y + size / 2, size * 0.9, self.theme());
     }
 };

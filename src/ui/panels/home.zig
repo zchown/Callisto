@@ -56,7 +56,7 @@ pub const HomePanel = struct {
     fn card(app: *App, r: *rl.Rectangle, height: f32, title: [:0]const u8) rl.Rectangle {
         const t = app.theme;
         const outer = rl.Rectangle{ .x = r.x, .y = r.y, .width = r.width, .height = height };
-        widget.frame(outer, 0.06, t.panel, t.border);
+        widget.frame(outer, t.card_radius_px, t.panel, t.border_soft);
 
         var inner = widget.inset(outer, 14);
         const head = widget.cutTop(&inner, 22);
@@ -76,8 +76,8 @@ pub const HomePanel = struct {
         const cy = head.y + 46;
         pieces.draw(.Knight, .White, head.x + 30, cy, 54, t);
 
-        widget.text(head.x + 68, head.y + 26, t.big_font + 8, t.text_bright, "Callisto");
-        widget.text(head.x + 70, head.y + 60, t.small_font, t.text_dim, "a chess workbench: play, analyse, and run engine matches");
+        widget.text(head.x + 70, head.y + 22, t.title_font, t.text_bright, "Callisto");
+        widget.text(head.x + 72, head.y + 58, t.small_font, t.text_dim, "play, analyse, and run engine matches");
     }
 
     fn drawNewGame(self: *HomePanel, app: *App, r: *rl.Rectangle) void {
@@ -106,10 +106,10 @@ pub const HomePanel = struct {
             app.match.white = .{ .kind = .human };
             app.match.black = .{ .kind = .human };
             app.newGame(app.match.startFen());
-            app.view = .game;
+            app.setView("game");
         }
         if (widget.button(t, analyse, "analyse board", .normal)) {
-            app.view = .analysis;
+            app.setView("analysis");
             if (!app.engines.analysis_on and app.engines.count > 0) app.toggleAnalysis();
         }
 

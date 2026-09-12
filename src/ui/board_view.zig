@@ -344,7 +344,7 @@ pub const BoardView = struct {
         const to_move = app.game.sideToMove();
         const active = m.state == .playing and to_move == side;
 
-        widget.frame(r, 0.2, if (active) t.panel_alt else t.panel, if (active) t.accent else t.border);
+        widget.frame(r, 6, if (active) t.panel_alt else t.panel, if (active) t.accent else t.border);
 
         const dot = rl.Rectangle{ .x = r.x + 8, .y = r.y + r.height / 2 - 5, .width = 10, .height = 10 };
         rl.drawRectangleRec(dot, if (side == .White) t.piece_white else t.piece_black);
@@ -434,11 +434,12 @@ pub const BoardView = struct {
             .width = w,
             .height = 34,
         };
-        widget.frame(r, 0.3, rl.fade(t.panel, 0.94), t.accent);
+        widget.frame(r, 10, rl.fade(t.panel, 0.94), t.accent);
         widget.textCentered(r.x + r.width / 2, r.y + (r.height - t.fontF()) / 2, t.font_size, t.text_bright, label);
     }
 
     fn handleInput(self: *BoardView, app: *App) void {
+        if (widget.input_blocked) return;
         if (self.promo_to != null) return;
 
         const mouse = rl.getMousePosition();

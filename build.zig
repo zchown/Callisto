@@ -106,6 +106,14 @@ pub fn build(b: *std.Build) void {
         .install_subdir = "lua",
     });
 
+    if (fileExists(b, "pieces")) {
+        b.installDirectory(.{
+            .source_dir = b.path("pieces"),
+            .install_dir = .bin,
+            .install_subdir = "pieces",
+        });
+    }
+
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
     if (b.args) |args| run_cmd.addArgs(args);

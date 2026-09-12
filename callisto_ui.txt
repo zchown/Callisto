@@ -1,0 +1,2 @@
+piece_set=caliente
+piece_tint=0

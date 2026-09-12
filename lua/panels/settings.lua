@@ -58,6 +58,32 @@ function M.draw()
     ui.end_row()
 
     ui.separator()
+    ui.heading("Pieces")
+
+    local sets = theme.piece_sets()
+    local current = theme.piece_set()
+
+    if #sets == 0 then
+        ui.dim("no piece sets found")
+        ui.dim("drop a folder of PNGs into " .. (theme.pieces_dir() or "pieces/"))
+        if ui.button("rescan") then theme.rescan_pieces() end
+    else
+        ui.begin_row(24)
+        if ui.button("built-in", current == nil and "primary" or "normal") then
+            theme.set_piece_set(nil)
+        end
+        for _, name in ipairs(sets) do
+            if ui.button(name, current == name and "primary" or "normal") then
+                theme.set_piece_set(name)
+            end
+        end
+        ui.end_row()
+
+        local tint, changed = ui.checkbox("tint artwork with theme colours", theme.piece_tint())
+        if changed then theme.set_piece_tint(tint) end
+    end
+
+    ui.separator()
     ui.heading("UI")
     ui.dim("scripts: " .. app.script_dir())
     ui.label("api version", tostring(app.api_version), "dim")

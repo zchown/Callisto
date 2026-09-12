@@ -5,7 +5,6 @@ const Lua = zlua.Lua;
 const chess = @import("chess");
 
 const App = @import("../app.zig").App;
-const View = @import("../app.zig").View;
 const vm_mod = @import("vm.zig");
 const Vm = vm_mod.Vm;
 const ui_mod = @import("../ui/ui.zig");
@@ -31,6 +30,7 @@ fn currentUi(lua: *Lua) *Ui {
     return ui_ptr orelse lua.raiseErrorStr("ui functions can only be called while a panel is drawing", .{});
 }
 
+/// Set by the VM around a panel draw so `ui.*` knows where to draw.
 pub fn beginPanelDraw(ui: *Ui) void {
     ui_ptr = ui;
 }
@@ -38,6 +38,10 @@ pub fn beginPanelDraw(ui: *Ui) void {
 pub fn endPanelDraw() void {
     ui_ptr = null;
 }
+
+// ---------------------------------------------------------------------------
+// ui
+// ---------------------------------------------------------------------------
 
 fn uiText(lua: *Lua) i32 {
     currentUi(lua).text(lua.checkString(1));
@@ -180,6 +184,7 @@ fn uiClocks(lua: *Lua) i32 {
     return 0;
 }
 
+/// ui.register_panel(name, title, draw_fn)
 fn uiRegisterPanel(lua: *Lua) !i32 {
     const name = lua.checkString(1);
     const title = lua.checkString(2);
@@ -195,6 +200,7 @@ fn uiRegisterPanel(lua: *Lua) !i32 {
     return 0;
 }
 
+/// ui.set_view(name, spec)
 fn uiSetView(lua: *Lua) !i32 {
     const name = lua.checkString(1);
     lua.checkType(2, .table);
@@ -241,6 +247,10 @@ const ui_fns = [_]zlua.FnReg{
     .{ .name = "set_view", .func = zlua.wrap(uiSetView) },
 };
 
+// ---------------------------------------------------------------------------
+// chess
+// ---------------------------------------------------------------------------
+
 fn chessFen(lua: *Lua) i32 {
     const a = app();
     const text = a.game.currentFen(a.allocator) catch {
@@ -261,6 +271,8 @@ fn chessMakeMove(lua: *Lua) i32 {
     const text = lua.checkString(1);
     const a = app();
 
+    // Routed through the app, not the game, so match clocks and the
+    // "is it your turn" check are not bypassed.
     if (text.len < 4) {
         lua.pushBoolean(false);
         return 1;
@@ -423,6 +435,12 @@ const chess_fns = [_]zlua.FnReg{
     .{ .name = "last_move", .func = zlua.wrap(chessLastMove) },
 };
 
+// ---------------------------------------------------------------------------
+// engine
+// ---------------------------------------------------------------------------
+
+/// Lua indices are 1-based. With no argument, prefer the first analysis engine
+/// and fall back to the selected one.
 fn engineAt(lua: *Lua, arg: i32) ?*engine_mod.Engine {
     const a = app();
     if (lua.optInteger(arg)) |n| {
@@ -533,6 +551,7 @@ fn engineNps(lua: *Lua) i32 {
     return 1;
 }
 
+/// Centipawns from white's point of view, or nil when there is no score.
 fn engineScore(lua: *Lua) i32 {
     const e = engineAt(lua, 1) orelse {
         lua.pushNil();
@@ -569,6 +588,7 @@ fn engineScoreText(lua: *Lua) i32 {
     return 1;
 }
 
+/// engine.pv([index], [line]) -> san text
 fn enginePv(lua: *Lua) i32 {
     const e = engineAt(lua, 1) orelse {
         _ = lua.pushString("");
@@ -646,6 +666,10 @@ const engine_fns = [_]zlua.FnReg{
     .{ .name = "stop", .func = zlua.wrap(engineStop) },
 };
 
+// ---------------------------------------------------------------------------
+// match
+// ---------------------------------------------------------------------------
+
 fn matchState(lua: *Lua) i32 {
     _ = lua.pushString(switch (app().match.state) {
         .idle => "idle",
@@ -685,6 +709,7 @@ fn matchClock(lua: *Lua) i32 {
     return 1;
 }
 
+/// match.set_player("white", "human" | engine_index)
 fn matchSetPlayer(lua: *Lua) i32 {
     const m = &app().match;
     const side_name = lua.checkString(1);
@@ -700,6 +725,8 @@ fn matchSetPlayer(lua: *Lua) i32 {
     return 0;
 }
 
+/// match.set_time(kind, a, b) - seconds for clock kinds, ms/depth/nodes
+/// otherwise.
 fn matchSetTime(lua: *Lua) i32 {
     const m = &app().match;
     const kind = lua.checkString(1);
@@ -742,6 +769,83 @@ const match_fns = [_]zlua.FnReg{
     .{ .name = "set_games", .func = zlua.wrap(matchSetGames) },
 };
 
+// ---------------------------------------------------------------------------
+// theme
+// ---------------------------------------------------------------------------
+
+fn themePieceSets(lua: *Lua) i32 {
+    const lib = &app().piece_library;
+    lua.createTable(@intCast(lib.count), 0);
+    for (0..lib.count) |i| {
+        _ = lua.pushString(lib.nameAt(i));
+        lua.rawSetIndex(-2, @intCast(i + 1));
+    }
+    return 1;
+}
+
+/// Current set name, or nil when the built-in vector pieces are in use.
+fn themePieceSet(lua: *Lua) i32 {
+    const name = app().pieceSetName();
+    if (name.len == 0) {
+        lua.pushNil();
+    } else {
+        _ = lua.pushString(name);
+    }
+    return 1;
+}
+
+/// Pass nil or "" to go back to the built-in pieces.
+fn themeSetPieceSet(lua: *Lua) i32 {
+    const name = lua.optString(1) orelse "";
+    lua.pushBoolean(app().setPieceSet(name));
+    return 1;
+}
+
+/// Applied only when the user has not picked a set, so a script can ship a
+/// default without overriding someone's choice on every reload.
+fn themeSetDefaultPieceSet(lua: *Lua) i32 {
+    app().applyDefaultPieceSet(lua.checkString(1));
+    return 0;
+}
+
+fn themePieceTint(lua: *Lua) i32 {
+    lua.pushBoolean(app().theme.piece_tint);
+    return 1;
+}
+
+fn themeSetPieceTint(lua: *Lua) i32 {
+    app().setPieceTint(lua.toBoolean(1));
+    return 0;
+}
+
+fn themePiecesDir(lua: *Lua) i32 {
+    const dir = app().piece_library.dirSlice();
+    if (dir.len == 0) {
+        lua.pushNil();
+    } else {
+        _ = lua.pushString(dir);
+    }
+    return 1;
+}
+
+fn themeRescanPieces(lua: *Lua) i32 {
+    _ = lua;
+    const a = app();
+    a.piece_library.discover(a.allocator);
+    return 0;
+}
+
+const theme_fns = [_]zlua.FnReg{
+    .{ .name = "piece_sets", .func = zlua.wrap(themePieceSets) },
+    .{ .name = "piece_set", .func = zlua.wrap(themePieceSet) },
+    .{ .name = "set_piece_set", .func = zlua.wrap(themeSetPieceSet) },
+    .{ .name = "set_default_piece_set", .func = zlua.wrap(themeSetDefaultPieceSet) },
+    .{ .name = "piece_tint", .func = zlua.wrap(themePieceTint) },
+    .{ .name = "set_piece_tint", .func = zlua.wrap(themeSetPieceTint) },
+    .{ .name = "pieces_dir", .func = zlua.wrap(themePiecesDir) },
+    .{ .name = "rescan_pieces", .func = zlua.wrap(themeRescanPieces) },
+};
+
 fn appQuit(lua: *Lua) i32 {
     _ = lua;
     app().quit_requested = true;
@@ -749,20 +853,34 @@ fn appQuit(lua: *Lua) i32 {
 }
 
 fn appView(lua: *Lua) i32 {
-    _ = lua.pushString(app().view.label());
+    _ = lua.pushString(app().viewId());
     return 1;
 }
 
 fn appSetView(lua: *Lua) i32 {
-    const name = lua.checkString(1);
+    app().setView(lua.checkString(1));
+    return 0;
+}
+
+fn appNewTab(lua: *Lua) i32 {
+    _ = lua;
+    app().newTab();
+    return 0;
+}
+
+fn appTabs(lua: *Lua) i32 {
     const a = app();
-    if (std.mem.eql(u8, name, "home")) {
-        a.view = .home;
-    } else if (std.mem.eql(u8, name, "game")) {
-        a.view = .game;
-    } else if (std.mem.eql(u8, name, "analysis")) {
-        a.view = .analysis;
+    lua.createTable(@intCast(a.tab_count), 0);
+    for (0..a.tab_count) |i| {
+        _ = lua.pushString(a.tabName(i));
+        lua.rawSetIndex(-2, @intCast(i + 1));
     }
+    return 1;
+}
+
+fn appSelectTab(lua: *Lua) i32 {
+    const n = lua.checkInteger(1);
+    if (n >= 1) app().selectTab(@intCast(n - 1));
     return 0;
 }
 
@@ -843,6 +961,9 @@ const app_fns = [_]zlua.FnReg{
     .{ .name = "quit", .func = zlua.wrap(appQuit) },
     .{ .name = "view", .func = zlua.wrap(appView) },
     .{ .name = "set_view", .func = zlua.wrap(appSetView) },
+    .{ .name = "new_tab", .func = zlua.wrap(appNewTab) },
+    .{ .name = "tabs", .func = zlua.wrap(appTabs) },
+    .{ .name = "select_tab", .func = zlua.wrap(appSelectTab) },
     .{ .name = "status", .func = zlua.wrap(appStatus) },
     .{ .name = "set_status", .func = zlua.wrap(appSetStatus) },
     .{ .name = "clipboard", .func = zlua.wrap(appClipboard) },
@@ -875,6 +996,7 @@ pub fn install(v: *Vm, lua: *Lua) void {
     installTable(lua, "chess", &chess_fns);
     installTable(lua, "engine", &engine_fns);
     installTable(lua, "match", &match_fns);
+    installTable(lua, "theme", &theme_fns);
     installTable(lua, "app", &app_fns);
 
     _ = lua.getGlobal("app") catch {
